@@ -46,3 +46,36 @@ A proposta prevê:
 - **consulta à informação oficial sobre o direito ao almoço gratuito**, feita apenas pelos responsáveis pelo benefício.
 
 São duas verificações diferentes, e nenhuma das duas integrações existe ainda. Elas dependem de viabilidade técnica, de autorização do IFMA e das regras do benefício definidas pelo campus. Enquanto isso não for validado, o sistema usa login com matrícula e senha e dados de exemplo.
+
+## Perfis de usuário
+
+| Perfil | O que faz |
+|---|---|
+| Aluno | Vê o cardápio, faz pedidos, escolhe a janela de retirada e acompanha o status pelo código |
+| Equipe da cantina | Vê a fila de pedidos, muda o status, confirma a entrega pelo código e registra pedidos presenciais e o estoque |
+| Gestão | Consulta relatórios de vendas e perdas e configura as regras (janelas, limites, estoque mínimo) |
+| Responsável pelo benefício | Consulta se um aluno tem direito ao almoço gratuito (informação visível só para esse perfil) |
+| Painel de chamada (TV) | Tela pública, sem login, que mostra os códigos "Em preparo" e "Pronto — retire" |
+
+## Funcionalidades
+
+**Aluno**
+- Entrar com matrícula e senha
+- Ver o cardápio por categoria, com busca, preço, horário de venda e disponibilidade
+- Adicionar e remover itens do carrinho e alterar quantidades
+- Escolher uma janela de retirada entre as que ainda têm vagas
+- Revisar e confirmar o pedido, que gera o código
+- Acompanhar o status (Recebido → Em preparo → Pronto para retirada → Entregue)
+- Cancelar o pedido enquanto ele estiver como Recebido
+- Ver o histórico dos próprios pedidos
+
+**Cantina**
+- Ver a fila de pedidos por status e por janela
+- Avançar o status do pedido
+- Confirmar a entrega digitando o código
+- Registrar pedido presencial no balcão
+- Registrar entradas, saídas e perdas de estoque; receber aviso de estoque baixo
+
+**Gestão**
+- Relatórios de vendas por produto, dia e horário, com os picos de demanda
+- Configuração das janelas, do limite de pedidos por janela e do estoque mínimo
