@@ -119,3 +119,121 @@ O projeto não usa ORM (Prisma, Sequelize etc.). Todo o banco é feito com coman
 - cada Model do backend contém as próprias consultas (`SELECT`, `INSERT`, `UPDATE`) e as executa pelo `mysql2`.
 
 Todas as consultas usam parâmetros (`?`) em vez de concatenar texto, o que evita SQL injection. As operações que mexem em vagas e estoque rodam dentro de uma transação (`BEGIN` / `COMMIT`), para que dois alunos não peguem a última vaga ao mesmo tempo.
+
+## Banco de dados
+
+### Tabelas
+
+| Tabela | Conteúdo |
+|---|---|
+| `usuarios` | Matrícula, nome, curso, perfil (`ALUNO`, `CANTINA`, `GESTAO`, `BENEFICIO`) e hash da senha |
+| `produtos` | Nome, categoria, preço, descrição, foto, horário de venda, estoque, estoque mínimo e se está ativo |
+| `janelas` | Início, fim e limite de pedidos de cada janela de retirada |
+| `pedidos` | Código, data, aluno, janela, origem (`ONLINE` ou `BALCAO`), status, total e motivo de cancelamento |
+| `itens_pedido` | Produtos de cada pedido, com quantidade e preço unitário no momento da compra |
+| `movimentacoes_estoque` | Entradas, saídas, perdas (com motivo) e baixas por venda |
+
+### Trecho do `schema.sql`
+
+```sql
+CREATE TABLE pedidos (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  codigo        CHAR(5)       NOT NULL,              -- ex.: A-042
+  data          DATE          NOT NULL,
+  usuario_id    INT           NULL,                  -- NULL no pedido presencial
+  janela_id     INT           NULL,                  -- NULL no pedido de balcão
+  origem        ENUM('ONLINE','BALCAO') NOT NULL DEFAULT 'ONLINE',
+  status        ENUM('RECEBIDO','EM_PREPARO','PRONTO','ENTREGUE','CANCELADO','NAO_RETIRADO')
+                NOT NULL DEFAULT 'RECEBIDO',
+  total         DECIMAL(8,2)  NOT NULL,
+  motivo_cancelamento VARCHAR(200) NULL,
+  criado_em     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_codigo_dia (data, codigo),
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  FOREIGN KEY (janela_id)  REFERENCES janelas(id)
+);
+```
+
+### Exemplo de consulta escrita à mão
+
+Vagas restantes de cada janela no dia (usada na tela "Escolher horário"):
+
+```sql
+SELECT j.id, j.inicio, j.fim, j.limite,
+       j.limite - COUNT(p.id) AS vagas
+FROM janelas j
+LEFT JOIN pedidos p
+       ON p.janela_id = j.id
+      AND p.data = ?
+      AND p.status <> 'CANCELADO'
+WHERE j.ativa = 1
+GROUP BY j.id
+ORDER BY j.inicio;
+```
+
+No backend, essa consulta fica em `slotModel.ts`:
+
+```ts
+const [rows] = await db.query(SQL_VAGAS_POR_JANELA, [data]);
+```
+
+## Organização MVC
+
+O projeto tem três pastas principais: `database/`, `backend/` e `frontend/`.
+
+| Camada | Onde fica | O que tem |
+|---|---|---|
+| Model | `backend/src/models/` | As consultas SQL e as regras de negócio: vagas da janela, antecedência de 30 minutos, estoque e transições de status. As regras puras ficam em `slotRules.ts` e `orderRules.ts`, com testes. |
+| View | `frontend/src/app/` e `frontend/src/components/` | As telas que o usuário vê (Next.js e React). Cada pasta de `app/` é uma tela. |
+| Controller | `backend/src/controllers/` e `backend/src/routes/` | Recebe a requisição, valida os dados (zod), chama o Model e devolve JSON. As rotas ligam cada endereço ao seu controller. |
+
+**Fluxo de uma ação:** a View (botão "Confirmar pedido") chama a API → a rota (`routes/index.ts`) encaminha para o `orderController` → o controller valida os dados e chama o `orderModel` → o model abre uma transação, confere vagas e estoque, faz os `INSERT` em `pedidos` e `itens_pedido` e confirma → a resposta volta em JSON com o código do pedido → a View mostra a tela de acompanhamento.
+
+### Estrutura de pastas
+
+```
+ifome/
+├── docker-compose.yml           MySQL para desenvolvimento
+├── database/
+│   ├── schema.sql               CREATE TABLE de todas as tabelas
+│   └── seed.sql                 INSERT dos dados de exemplo
+├── backend/
+│   ├── src/
+│   │   ├── models/              Model: consultas SQL e regras
+│   │   ├── controllers/         Controller
+│   │   ├── routes/              rotas da API
+│   │   ├── middlewares/         autenticação (JWT) e tratamento de erros
+│   │   ├── lib/                 db.ts (conexão mysql2), config, erros
+│   │   ├── app.ts               configuração do Express
+│   │   └── server.ts            inicia o servidor
+│   └── tests/                   testes das regras de janela e de status
+├── frontend/
+│   └── src/
+│       ├── app/                 View: páginas (rotas do Next.js)
+│       │   ├── layout.tsx       layout base com cabeçalho e rodapé
+│       │   ├── (app)/layout.tsx exige login e mostra o menu inferior
+│       │   └── ...              uma pasta por tela
+│       ├── components/          Header, Footer, BottomNav e peças de interface
+│       └── lib/                 chamadas à API, login, carrinho, formatação
+└── docs/                        requisitos, design e imagens do protótipo
+```
+
+### Partes reaproveitadas
+
+O cabeçalho e o rodapé ficam em `frontend/src/app/layout.tsx` e aparecem em todas as telas. O menu inferior fica em `frontend/src/app/(app)/layout.tsx` e aparece em todas as telas logadas. Botões, cartões de produto, selos de status, o código do pedido e o seletor de quantidade ficam em `frontend/src/components/`.
+
+## Rotas da API
+
+| Método | Rota | Quem usa | O que faz |
+|---|---|---|---|
+| POST | `/api/auth/login` | Todos | Entra com matrícula e senha e devolve o token |
+| GET | `/api/auth/me` | Todos | Dados do usuário logado |
+| GET | `/api/produtos` | Aluno | Cardápio do momento, com disponibilidade |
+| GET | `/api/produtos/:id` | Aluno | Detalhe do produto |
+| GET | `/api/janelas?data=AAAA-MM-DD` | Aluno | Janelas do dia com as vagas restantes |
+| POST | `/api/pedidos` | Aluno | Cria o pedido e devolve o código |
+| GET | `/api/pedidos/meus` | Aluno | Histórico do aluno |
+| GET | `/api/pedidos/:id` | Aluno | Status atual do pedido |
+| PATCH | `/api/pedidos/:id/cancelar` | Aluno | Cancela o pedido enquanto estiver Recebido |
+| PATCH | `/api/pedidos/:id/status` | Cantina | Avança o status do pedido |
