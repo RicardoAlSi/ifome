@@ -190,6 +190,161 @@ O projeto tem três pastas principais: `database/`, `backend/` e `frontend/`.
 
 **Fluxo de uma ação:** a View (botão "Confirmar pedido") chama a API → a rota (`routes/index.ts`) encaminha para o `orderController` → o controller valida os dados e chama o `orderModel` → o model abre uma transação, confere vagas e estoque, faz os `INSERT` em `pedidos` e `itens_pedido` e confirma → a resposta volta em JSON com o código do pedido → a View mostra a tela de acompanhamento.
 
+## Protótipos
+
+Protótipo no Figma: https://www.figma.com/design/6u097k9q7Z71OI1Pd6Kexl/IFome---Protótipo
+
+O arquivo segue o design system do IFome (cores do IFMA, fontes Lexend e IBM Plex Mono) e está organizado em páginas: Fundamentos (cores, tipografia e espaçamentos), Componentes e as telas do aluno. As imagens das telas (9 telas e seus estados) estão em `docs/prototipos/`:
+
+| Tela | Arquivos |
+|---|---|
+| A1 Login | `A1_Login-*.png` |
+| A2 Cardápio | `A2_Cardápio-*.png` |
+| A3 Detalhe do produto | `A3_Detalhe_do_produto-*.png` |
+| A4 Carrinho | `A4_Carrinho-*.png` |
+| A5 Escolher horário | `A5_Escolher_horário-*.png` |
+| A6 Revisão e confirmação | `A6_Revisão_e_confirmação-*.png` |
+| A7 Acompanhamento | `A7_Acompanhamento-*.png` |
+| A8 Meus pedidos | `A8_Meus_pedidos-*.png` |
+| A9 Perfil | `A9_Perfil-Padrão.png` |
+
+## Como instalar e rodar
+
+Requisitos: Node.js 20 ou mais novo e Docker (ou um MySQL 8 instalado na máquina).
+
+### 1. Subir o MySQL
+
+```bash
+docker compose up -d
+```
+
+### 2. Criar o banco e as tabelas (à mão)
+
+Com o MySQL rodando, execute os scripts SQL na ordem:
+
+```bash
+docker compose exec -T mysql mysql -u root -proot -e "CREATE DATABASE IF NOT EXISTS ifome CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+docker compose exec -T mysql mysql -u root -proot ifome < database/schema.sql
+docker compose exec -T mysql mysql -u root -proot ifome < database/seed.sql
+```
+
+Se usar um MySQL instalado na máquina, rode os mesmos comandos sem o `docker compose exec -T mysql`:
+
+```bash
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS ifome CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+mysql -u root -p ifome < database/schema.sql
+mysql -u root -p ifome < database/seed.sql
+```
+
+Para conferir se as tabelas foram criadas:
+
+```bash
+docker compose exec mysql mysql -u root -proot ifome -e "SHOW TABLES;"
+```
+
+Para recomeçar do zero, apague e recrie o banco:
+
+```sql
+DROP DATABASE ifome;
+```
+
+### 3. Backend (http://localhost:3333/api)
+
+```bash
+cd backend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Variáveis do `.env`:
+
+```
+PORT=3333
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=root
+DB_NAME=ifome
+JWT_SECRET=troque-este-valor
+```
+
+### 4. Frontend (http://localhost:3000)
+
+```bash
+cd frontend
+cp .env.local.example .env.local
+npm install
+npm run dev
+```
+
+### Usuários de teste
+
+Criados pelo `seed.sql` (as senhas já estão com hash bcrypt no script):
+
+| Perfil | Login | Senha |
+|---|---|---|
+| Aluno | `20251INF0123` (Ana Beatriz Sousa) | `123456` |
+| Cantina | `cantina` | `123456` |
+
+Para a cantina avançar o status de um pedido, entre com o usuário `cantina` e use a rota `PATCH /api/pedidos/:id/status` com `{ "status": "EM_PREPARO" }`.
+
+### Testes
+
+```bash
+cd backend
+npm test
+```
+
+## Implantação por etapas
+
+1. **Validação e versão inicial:** confirmar com a cantina o fluxo de atendimento e, com o IFMA, a integração ao SUAP. Construir cardápio, pedidos, retirada por código e controle básico de estoque.
+2. **Piloto no campus:** testar com um grupo de alunos, medir o atendimento e ajustar antes de ampliar o uso.
+
+Antes do piloto, a equipe e a cantina precisam combinar o que fazer em caso de falta de conexão, cancelamentos e divergências na retirada. Os prazos dependem da equipe e da infraestrutura do campus.
+
+## Resultados esperados
+
+Mais organização no atendimento e mais informação para planejar a cantina. Não há percentuais prometidos: o piloto vai comparar os indicadores antes e durante o uso do sistema.
+
+| Indicador | O que mostra |
+|---|---|
+| Tempo de espera | Se a fila diminuiu nos horários de pico |
+| Pedidos entregues | Quantos pedidos online foram retirados no horário |
+| Indisponibilidade de produtos | Com que frequência os itens esgotam |
+| Perdas de estoque | Quanto se perde por vencimento ou dano |
+
+## Decisões e limites
+
+- O login usa matrícula e senha com usuários de exemplo. A integração com o SUAP e a consulta ao almoço gratuito dependem de validação com o IFMA.
+- O pagamento é no balcão; o pagamento online depende de definição posterior.
+- O banco não usa ORM: tabelas, dados de exemplo e consultas são escritos em SQL pela equipe.
+- O estoque é controlado por produto. O controle por ingredientes ainda precisa ser definido com a cantina.
+- Ainda falta definir com o IFMA quem administra os acessos dos perfis.
+- Ainda não há tela para a cantina, só a rota de mudar status. As telas da cantina, da gestão e do painel da TV são as próximas etapas.
+
+## Integrantes
+
+A divisão abaixo é a inicial. Cada integrante faz os commits da sua parte (ver "Divisão de commits").
+
+| Integrante | GitHub | Responsabilidade |
+|---|---|---|
+| João Gabriel Castro Silva | [JoaoGabriel04](https://github.com/JoaoGabriel04) | Backend: Express, banco (`schema.sql` e `seed.sql`), conexão MySQL e autenticação |
+| Ricardo Alves Silva | [RicardoAlSi](https://github.com/RicardoAlSi) | Backend: pedidos (model com SQL, controller, rotas) |
+| Carlos Eduardo Santos Reis | [carloseduardosantosreis12-glitch](https://github.com/carloseduardosantosreis12-glitch) | Backend: cardápio e horários (models com SQL, controllers, regras) |
+| Kauã de Oliveira Sousa | [fvsousa150-sudo](https://github.com/fvsousa150-sudo) | Frontend: layout base (cabeçalho, menu, rodapé), página inicial e login |
+| Paulo Alves dos Reis Neto | [Paulo-Neto1](https://github.com/Paulo-Neto1) | Frontend: cardápio, detalhe do produto e carrinho |
+| Nicolas Lima de Araújo | [Nykolas007](https://github.com/Nykolas007) | Frontend: escolher horário, revisar, acompanhamento, meus pedidos e perfil |
+
+## Divisão de commits
+
+O enunciado pede commits de todos os integrantes desde o início. Sugestão: um integrante cria o repositório no GitHub e adiciona os outros como colaboradores. Cada um clona, cria uma branch com o seu nome, faz os commits da sua parte (tabela de integrantes) e abre um Pull Request. Exemplo:
+
+```bash
+git checkout -b carlos/cardapio-horarios
+git add backend/src/models/productModel.ts backend/src/models/slotModel.ts backend/src/models/slotRules.ts
+git commit -m "feat: model de produtos e janelas de retirada com SQL"
+git push -u origin carlos/cardapio-horarios
 ### Estrutura de pastas
 
 ```
