@@ -79,3 +79,43 @@ São duas verificações diferentes, e nenhuma das duas integrações existe ain
 **Gestão**
 - Relatórios de vendas por produto, dia e horário, com os picos de demanda
 - Configuração das janelas, do limite de pedidos por janela e do estoque mínimo
+
+
+## Regras de negócio
+
+| Regra | Descrição |
+|---|---|
+| Janela de retirada | Cada janela tem 15 minutos e um limite de pedidos (padrão: 30). Ao atingir o limite, aparece como Lotada e não pode ser escolhida. |
+| Antecedência | Pedidos online são aceitos até 30 minutos antes do início da janela. |
+| Código do pedido | Letra + hífen + 3 dígitos (`A-042`). A letra indica o turno ou o balcão, e a numeração reinicia todo dia. Pedidos presenciais usam o mesmo formato. |
+| Status | Recebido → Em preparo → Pronto para retirada → Entregue. O aluno só cancela enquanto o pedido está como Recebido; a cantina pode cancelar antes da entrega, informando o motivo. |
+| Não retirado | Pedido pronto e não retirado até 30 minutos após o fim da janela passa a Não retirado. |
+| Estoque | Itens de um pedido confirmado ficam reservados, são baixados na entrega e voltam ao estoque se o pedido for cancelado. Com estoque zerado, o produto vira Esgotado; com estoque igual ou abaixo do mínimo, mostra "Últimas N". |
+| Horário de venda | Um item só aparece no cardápio dentro do seu horário de venda (ex.: café da manhã até 9h30). |
+| Pedidos ativos | Cada aluno pode ter no máximo 2 pedidos ativos ao mesmo tempo. |
+| Privacidade | O painel da TV mostra apenas códigos, nunca nomes. A informação sobre o almoço gratuito só aparece para o responsável pelo benefício. |
+
+## Tecnologias
+
+| Camada | Tecnologia |
+|---|---|
+| Linguagem | **TypeScript** (backend e frontend) |
+| Banco de dados | **MySQL 8**, com as tabelas e as consultas escritas **em SQL, à mão** |
+| Backend | **Node.js 20** com **Express 4** |
+| Acesso ao banco | **mysql2** (driver oficial com suporte a Promises e consultas parametrizadas) |
+| Validação | zod |
+| Autenticação | JWT (jsonwebtoken) e senhas com hash (bcrypt) |
+| Frontend | **Next.js 15** (React 19) com **TailwindCSS 4** |
+| Leituras no frontend | SWR |
+| Ícones | Lucide React |
+| Testes | Vitest (regras de janela e de status) |
+
+### Por que sem ORM
+
+O projeto não usa ORM (Prisma, Sequelize etc.). Todo o banco é feito com comandos SQL escritos pela equipe:
+
+- as tabelas são criadas pelo script `database/schema.sql`, rodado à mão no MySQL;
+- os dados de exemplo são inseridos pelo script `database/seed.sql`;
+- cada Model do backend contém as próprias consultas (`SELECT`, `INSERT`, `UPDATE`) e as executa pelo `mysql2`.
+
+Todas as consultas usam parâmetros (`?`) em vez de concatenar texto, o que evita SQL injection. As operações que mexem em vagas e estoque rodam dentro de uma transação (`BEGIN` / `COMMIT`), para que dois alunos não peguem a última vaga ao mesmo tempo.
