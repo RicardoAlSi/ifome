@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ifma-verde: #2f9e41;
+  --color-ifma-verde-escuro: #1f6e2c;
+  --color-ifma-vermelho: #cd191e;
+  --font-sans: var(--font-lexend), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+body {
+  @apply bg-white text-zinc-900 antialiased;
+}
